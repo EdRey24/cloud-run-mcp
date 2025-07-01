@@ -30,34 +30,36 @@ import 'dotenv/config';
 
 const gcpInfo = await checkGCP();
 
+process.on('uncaughtException', (err) => {
+  console.error('CRITICAL ERROR: Cloud Run MCP server encountered an uncaught exception.');
+  console.error(`Details: ${err.message}`);
+  console.error('To resolve this, please ensure your Google Cloud Application Default Credentials (ADC) are set up correctly by running:');
+  console.error('gcloud auth application-default login');
+  process.exit(1); // Exit with a failure code
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('CRITICAL ERROR: Cloud Run MCP server encountered an unhandled promise rejection.');
+  console.error(`Details: ${reason instanceof Error ? reason.message : reason}`);
+  console.error('To resolve this, please ensure your Google Cloud Application Default Credentials (ADC) are set up correctly by running:');
+  console.error('gcloud auth application-default login');
+  process.exit(1); // Exit with a failure code
+});
+
+
 /**
  * Checks for local Application Default Credentials by attempting a simple Google Cloud API call.
  * @returns {Promise<boolean>} True if ADC is likely configured and functional, false otherwise.
  */
 async function checkLocalAdcStatusWithApiCall() {
-  try {
-    // Attempt a simple API call to check if credentials are working.
-    // listProjects will now throw an error if authentication fails or permissions are denied.
-    // A timeout is added to prevent indefinite waiting if something hangs.
-    await Promise.race([
-      listProjects(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('API call timeout for ADC check')), 10000)) // 10 seconds timeout
-    ]);
-    return true; // If listProjects succeeds (or resolves within timeout), ADC is working.
-  } catch (error) {
-    // Common gRPC error codes related to authentication/authorization:
-    // 16 (UNAUTHENTICATED): Missing or invalid credentials.
-    // 7 (PERMISSION_DENIED): Credentials are valid, but lack necessary permissions.
-    // 3 (INVALID_ARGUMENT): Can sometimes be returned if auth context is malformed.
-    if (error.code === 16 || error.code === 7 || error.code === 3) {
-      console.warn(`Authentication/Permission issue detected for local environment: ${error.message}`);
-      return false; // Indicates ADC might be missing or needs refresh
-    }
-    console.error('An unexpected error occurred while checking local ADC:', error.message);
-    // For other errors (e.g., network issues, API unavailable), we don't assume ADC is the problem.
-    // However, for the purpose of this check, we treat it as non-functional ADC to prompt the user.
-    return false;
-  }
+  // Attempt a simple API call to check if credentials are working.
+  // listProjects will now throw an error if authentication fails or permissions are denied.
+  // A timeout is added to prevent indefinite waiting if something hangs.
+  await Promise.race([
+    listProjects(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('API call timeout for ADC check')), 10000)) // 10 seconds timeout
+  ]);
+  return true; // If listProjects succeeds (or resolves within timeout), ADC is working.
 }
 
 // Logic to determine and print the appropriate authentication message
@@ -86,7 +88,7 @@ function makeLoggingCompatibleWithStdio() {
 }
 
 function shouldStartStdio() {
-  if(process.env.GCP_STDIO){
+  if (process.env.GCP_STDIO) {
     return true;
   }
   if (gcpInfo && gcpInfo.project) {
@@ -95,7 +97,7 @@ function shouldStartStdio() {
   return true;
 }
 
-if(shouldStartStdio()) {
+if (shouldStartStdio()) {
   makeLoggingCompatibleWithStdio();
 };
 
@@ -105,7 +107,7 @@ const envRegion = process.env.GOOGLE_CLOUD_REGION;
 const defaultServiceName = process.env.DEFAULT_SERVICE_NAME;
 const skipIamCheck = process.env.SKIP_IAM_CHECK === 'false'; // Convert string to boolean
 
-async function getServer () {
+async function getServer() {
   // Create an MCP server with implementation details
   const server = new McpServer({
     name: 'cloud-run',
