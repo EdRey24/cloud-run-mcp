@@ -5,3 +5,5 @@
 .env.test.local
 .env.production.local
 
+# Node.js
+node_modules/
