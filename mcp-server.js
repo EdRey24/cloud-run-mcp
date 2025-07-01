@@ -25,9 +25,56 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerTools, registerToolsRemote } from './tools.js';
 import { checkGCP } from './lib/gcp-metadata.js';
+import { listProjects } from './lib/gcp-projects.js'; // Import listProjects
 import 'dotenv/config';
 
 const gcpInfo = await checkGCP();
+
+/**
+ * Checks for local Application Default Credentials by attempting a simple Google Cloud API call.
+ * @returns {Promise<boolean>} True if ADC is likely configured and functional, false otherwise.
+ */
+async function checkLocalAdcStatusWithApiCall() {
+  try {
+    // Attempt a simple API call to check if credentials are working.
+    // listProjects will now throw an error if authentication fails or permissions are denied.
+    // A timeout is added to prevent indefinite waiting if something hangs.
+    await Promise.race([
+      listProjects(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('API call timeout for ADC check')), 10000)) // 10 seconds timeout
+    ]);
+    return true; // If listProjects succeeds (or resolves within timeout), ADC is working.
+  } catch (error) {
+    // Common gRPC error codes related to authentication/authorization:
+    // 16 (UNAUTHENTICATED): Missing or invalid credentials.
+    // 7 (PERMISSION_DENIED): Credentials are valid, but lack necessary permissions.
+    // 3 (INVALID_ARGUMENT): Can sometimes be returned if auth context is malformed.
+    if (error.code === 16 || error.code === 7 || error.code === 3) {
+      console.warn(`Authentication/Permission issue detected for local environment: ${error.message}`);
+      return false; // Indicates ADC might be missing or needs refresh
+    }
+    console.error('An unexpected error occurred while checking local ADC:', error.message);
+    // For other errors (e.g., network issues, API unavailable), we don't assume ADC is the problem.
+    // However, for the purpose of this check, we treat it as non-functional ADC to prompt the user.
+    return false;
+  }
+}
+
+// Logic to determine and print the appropriate authentication message
+if (gcpInfo && gcpInfo.project) {
+  // Running on GCP (e.g., Cloud Run, GCE)
+  console.log(`Running on Google Cloud Platform (Project: ${gcpInfo.project}, Region: ${gcpInfo.region}). Service account credentials are used for authentication.`);
+} else {
+  // Not running on GCP, check for local ADC by attempting an API call
+  const hasFunctionalLocalAdc = await checkLocalAdcStatusWithApiCall();
+  if (hasFunctionalLocalAdc) {
+    console.log('Detected functional local Google Cloud Application Default Credentials. Ready for local development.');
+  } else {
+    // gcloud CLI might not be installed or ADC not set up
+    console.log('To authenticate with Google Cloud for local development, please ensure the gcloud CLI is installed and run: gcloud auth application-default login');
+  }
+}
+
 
 /**
  * Ensure that console.log and console.error are compatible with stdio.
@@ -54,8 +101,8 @@ if(shouldStartStdio()) {
 
 // Read default configurations from environment variables
 const envProjectId = process.env.GOOGLE_CLOUD_PROJECT || undefined;
-const envRegion = process.env.GOOGLE_CLOUD_REGION; 
-const defaultServiceName = process.env.DEFAULT_SERVICE_NAME; 
+const envRegion = process.env.GOOGLE_CLOUD_REGION;
+const defaultServiceName = process.env.DEFAULT_SERVICE_NAME;
 const skipIamCheck = process.env.SKIP_IAM_CHECK === 'false'; // Convert string to boolean
 
 async function getServer () {
@@ -64,9 +111,6 @@ async function getServer () {
     name: 'cloud-run',
     version: '1.0.0',
   }, { capabilities: { logging: {} } });
-
-  // Get GCP metadata info once
-  const gcpInfo = await checkGCP();
 
   // Determine the effective project and region based on priority: Env Var > GCP Metadata > Hardcoded default
   const effectiveProjectId = envProjectId || (gcpInfo && gcpInfo.project) || undefined;
@@ -170,15 +214,14 @@ if (shouldStartStdio()) {
     // Create SSE transport for legacy clients
     const transport = new SSEServerTransport('/messages', res);
     sseTransports[transport.sessionId] = transport;
-    
+
     res.on("close", () => {
       delete sseTransports[transport.sessionId];
     });
-    
+
     await server.connect(transport);
   });
 
-  // Legacy message endpoint for older clients
   app.post('/messages', async (req, res) => {
     console.log('/messages Received:', req.body);
     const sessionId = req.query.sessionId;
