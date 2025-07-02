@@ -52,7 +52,7 @@ process.on('unhandledRejection', (reason, promise) => {
  * Checks for local Application Default Credentials by attempting a simple Google Cloud API call.
  * @returns {Promise<boolean>} True if ADC is likely configured and functional.
  */
-async function checkLocalAdcStatusWithApiCall() {
+export async function checkLocalAdcStatusWithApiCall() {
   // Attempt a simple API call to check if credentials are working.
   // listProjects will now throw an error if authentication fails or permissions are denied.
   // A timeout is added to prevent indefinite waiting if something hangs.

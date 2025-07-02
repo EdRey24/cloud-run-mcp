@@ -1,13 +1,13 @@
 // test/test-adc-behavior.js
 console.log('--- Loading test-adc-behavior.js (Simplified Error Handling) ---');
 
-import { listProjects } from '../lib/gcp-projects.js';
+import { checkLocalAdcStatusWithApiCall } from '../mcp-server.js';
 
 async function runSimplifiedTest() {
   console.log('--- Testing listProjects() with current ADC setup ---');
 
   try {
-    const projects = await listProjects(); // This call will throw an error if ADC is not found
+    const projects = await checkLocalAdcStatusWithApiCall(); // This call will throw an error if ADC is not found
 
     if (projects.length > 0) {
       console.log('✅ SUCCESS: listProjects() returned projects. ADC is likely functional and has permissions.');
