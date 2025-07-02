@@ -30,10 +30,11 @@ import 'dotenv/config';
 
 const gcpInfo = await checkGCP();
 
+// Using unhandled exceptions to catch when ADC isn't set
 process.on('uncaughtException', (err) => {
   console.error('CRITICAL ERROR: Cloud Run MCP server encountered an uncaught exception.');
   console.error(`Details: ${err.message}`);
-  console.error('To resolve this, please ensure your Google Cloud Application Default Credentials (ADC) are set up correctly by running:');
+  console.error('Likely to resolve this, please ensure your Google Cloud Application Default Credentials (ADC) are set up correctly by running:');
   console.error('gcloud auth application-default login');
   process.exit(1); // Exit with a failure code
 });
@@ -41,7 +42,7 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason, promise) => {
   console.error('CRITICAL ERROR: Cloud Run MCP server encountered an unhandled promise rejection.');
   console.error(`Details: ${reason instanceof Error ? reason.message : reason}`);
-  console.error('To resolve this, please ensure your Google Cloud Application Default Credentials (ADC) are set up correctly by running:');
+  console.error('Likely to resolve this, please ensure your Google Cloud Application Default Credentials (ADC) are set up correctly by running:');
   console.error('gcloud auth application-default login');
   process.exit(1); // Exit with a failure code
 });
@@ -49,7 +50,7 @@ process.on('unhandledRejection', (reason, promise) => {
 
 /**
  * Checks for local Application Default Credentials by attempting a simple Google Cloud API call.
- * @returns {Promise<boolean>} True if ADC is likely configured and functional, false otherwise.
+ * @returns {Promise<boolean>} True if ADC is likely configured and functional.
  */
 async function checkLocalAdcStatusWithApiCall() {
   // Attempt a simple API call to check if credentials are working.
